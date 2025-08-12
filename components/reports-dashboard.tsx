@@ -36,6 +36,7 @@ interface WeeklySales {
   count: number
   cash: number
   card: number
+  credit: number
 }
 
 interface WeeklyStats {
@@ -114,6 +115,9 @@ export default function ReportsDashboard() {
       const weeklyCard = weeklySalesFilter
         .filter((s) => s.paymentMethod === "card")
         .reduce((sum, sale) => sum + sale.total, 0)
+      const weeklyCredit = weeklySalesFilter
+        .filter((s) => s.paymentMethod === "credit")
+        .reduce((sum, sale) => sum + sale.total, 0)
 
       setWeeklySales({
         week: `${weekStart.toLocaleDateString("es-DO")} - ${weekEnd.toLocaleDateString("es-DO")}`,
@@ -122,6 +126,7 @@ export default function ReportsDashboard() {
         count: weeklySalesFilter.length,
         cash: weeklyCash,
         card: weeklyCard,
+        credit: weeklyCredit,
       })
 
       // Calculate weekly stats for the last 8 weeks
@@ -283,6 +288,19 @@ export default function ReportsDashboard() {
     }
   }
 
+  const getPaymentMethodName = (method: string) => {
+    switch (method) {
+      case "cash":
+        return "Efectivo"
+      case "card":
+        return "Tarjeta"
+      case "credit":
+        return "Crédito"
+      default:
+        return "Desconocido"
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -414,7 +432,7 @@ export default function ReportsDashboard() {
                               </TableCell>
                               <TableCell>
                                 <Badge variant={sale.paymentMethod === "cash" ? "default" : "secondary"}>
-                                  {sale.paymentMethod === "cash" ? "Efectivo" : "Tarjeta"}
+                                  {getPaymentMethodName(sale.paymentMethod)}
                                 </Badge>
                               </TableCell>
                               <TableCell>{sale.cashierName}</TableCell>
@@ -507,6 +525,20 @@ export default function ReportsDashboard() {
                     </p>
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Crédito</CardTitle>
+                    <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{SalesManager.formatCurrency(weeklySales.credit)}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {weeklySales.total > 0 ? ((weeklySales.credit / weeklySales.total) * 100).toFixed(1) : 0}% del
+                      total
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
@@ -541,8 +573,7 @@ export default function ReportsDashboard() {
                             <div>
                               <div className="font-medium">Venta #{sale.id.slice(-6)}</div>
                               <div className="text-sm text-muted-foreground">
-                                {SalesManager.formatTime(sale.timestamp)} -{" "}
-                                {sale.paymentMethod === "cash" ? "Efectivo" : "Tarjeta"}
+                                {SalesManager.formatTime(sale.timestamp)} - {getPaymentMethodName(sale.paymentMethod)}
                               </div>
                             </div>
                             <div className="text-right">

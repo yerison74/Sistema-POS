@@ -10,18 +10,25 @@ export interface SaleItem {
   subtotal: number
 }
 
+export interface CustomerInfo {
+  name: string
+  email: string
+  idCard: string
+}
+
 export interface Sale {
   id: string
   items: SaleItem[]
   subtotal: number
   tax: number
   total: number
-  paymentMethod: "cash" | "card"
+  paymentMethod: "cash" | "card" | "credit" // Agregando método de pago crédito
   amountPaid: number
   change: number
   cashierId: string
   cashierName: string
   timestamp: number
+  customerInfo?: CustomerInfo // Información opcional del cliente para crédito
 }
 
 export interface DailySales {
@@ -31,6 +38,7 @@ export interface DailySales {
   totalAmount: number
   cashSales: number
   cardSales: number
+  creditSales: number // Agregando ventas a crédito
 }
 
 const SALES_STORAGE_KEY = "pos-sales"
@@ -85,10 +93,11 @@ export class SalesManager {
 
   processSale(
     items: SaleItem[],
-    paymentMethod: "cash" | "card",
+    paymentMethod: "cash" | "card" | "credit",
     amountPaid: number,
     cashierId: string,
     cashierName: string,
+    customerInfo?: CustomerInfo,
   ): Sale {
     if (items.length === 0) {
       throw new Error("No hay productos en el carrito")
@@ -98,6 +107,10 @@ export class SalesManager {
 
     if (paymentMethod === "cash" && amountPaid < total) {
       throw new Error("El monto pagado es insuficiente")
+    }
+
+    if (paymentMethod === "credit" && !customerInfo) {
+      throw new Error("La información del cliente es requerida para ventas a crédito")
     }
 
     const change = paymentMethod === "cash" ? amountPaid - total : 0
@@ -119,6 +132,7 @@ export class SalesManager {
       cashierId,
       cashierName,
       timestamp: Date.now(),
+      customerInfo, // Agregando información del cliente
     }
 
     this.saveSale(sale)
@@ -156,6 +170,9 @@ export class SalesManager {
     dailySales.cardSales = dailySales.sales
       .filter((s) => s.paymentMethod === "card")
       .reduce((sum, s) => sum + s.total, 0)
+    dailySales.creditSales = dailySales.sales
+      .filter((s) => s.paymentMethod === "credit")
+      .reduce((sum, s) => sum + s.total, 0)
 
     const allDailySales = this.getAllDailySales()
     const existingIndex = allDailySales.findIndex((ds) => ds.date === today)
@@ -188,6 +205,7 @@ export class SalesManager {
       totalAmount: 0,
       cashSales: 0,
       cardSales: 0,
+      creditSales: 0, // Inicializando ventas a crédito
     }
   }
 

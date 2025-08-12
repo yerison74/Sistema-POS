@@ -37,8 +37,11 @@ export function SalesSystem() {
   const [searchResults, setSearchResults] = useState<Product[]>([])
   const [cart, setCart] = useState<SaleItem[]>([])
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash")
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "credit">("cash")
   const [amountPaid, setAmountPaid] = useState(0)
+  const [customerName, setCustomerName] = useState("")
+  const [customerEmail, setCustomerEmail] = useState("")
+  const [customerIdCard, setCustomerIdCard] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [lastSale, setLastSale] = useState<Sale | null>(null)
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false)
@@ -218,6 +221,9 @@ export function SalesSystem() {
   const clearCart = () => {
     setCart([])
     setSaleCompleted(false)
+    setCustomerName("")
+    setCustomerEmail("")
+    setCustomerIdCard("")
   }
 
   const { subtotal, tax, total } = salesManager.calculateSaleTotal(cart)
@@ -239,15 +245,35 @@ export function SalesSystem() {
       return
     }
 
+    if (paymentMethod === "credit") {
+      if (!customerName.trim() || !customerEmail.trim() || !customerIdCard.trim()) {
+        toast({
+          title: "Error",
+          description: "Todos los campos del cliente son obligatorios para ventas a crédito",
+        })
+        return
+      }
+    }
+
     setIsProcessing(true)
 
     try {
+      const customerInfo =
+        paymentMethod === "credit"
+          ? {
+              name: customerName,
+              email: customerEmail,
+              idCard: customerIdCard,
+            }
+          : undefined
+
       const sale = salesManager.processSale(
         cart,
         paymentMethod,
-        paymentMethod === "card" ? total : amountPaid,
+        paymentMethod === "card" || paymentMethod === "credit" ? total : amountPaid,
         user?.name || "unknown",
         user?.name || "Cajero",
+        customerInfo,
       )
 
       setLastSale(sale)
@@ -449,7 +475,10 @@ export function SalesSystem() {
           <div className="space-y-4">
             <div>
               <Label>Método de Pago</Label>
-              <Select value={paymentMethod} onValueChange={(value: "cash" | "card") => setPaymentMethod(value)}>
+              <Select
+                value={paymentMethod}
+                onValueChange={(value: "cash" | "card" | "credit") => setPaymentMethod(value)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -466,9 +495,58 @@ export function SalesSystem() {
                       Tarjeta
                     </div>
                   </SelectItem>
+                  <SelectItem value="credit">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4" />
+                      Crédito
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {paymentMethod === "credit" && (
+              <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <Label className="text-sm font-medium text-blue-800">Información del Cliente</Label>
+                <div>
+                  <Label htmlFor="customerName" className="text-xs">
+                    Nombre del Cliente *
+                  </Label>
+                  <Input
+                    id="customerName"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Nombre completo del cliente"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="customerEmail" className="text-xs">
+                    Correo del Cliente *
+                  </Label>
+                  <Input
+                    id="customerEmail"
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    placeholder="correo@ejemplo.com"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="customerIdCard" className="text-xs">
+                    ID del Carnet *
+                  </Label>
+                  <Input
+                    id="customerIdCard"
+                    value={customerIdCard}
+                    onChange={(e) => setCustomerIdCard(e.target.value)}
+                    placeholder="Número de cédula o identificación"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            )}
 
             {paymentMethod === "cash" && (
               <div>
@@ -517,6 +595,7 @@ export function SalesSystem() {
 }
 
 // ... existing ProductSearchResult and CartItem components remain the same ...
+
 interface ProductSearchResultProps {
   product: Product
   onAdd: (product: Product, quantity: number, weight?: number) => void

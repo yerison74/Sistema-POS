@@ -12,4 +12,4 @@ export default function HomePage() {
   }
 
   return <POSLayout />
-} 
+}

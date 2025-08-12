@@ -152,6 +152,19 @@ function ReceiptPreview({ sale, businessInfo }: ReceiptPreviewProps) {
   const settingsManager = SettingsManager.getInstance()
   const systemSettings = settingsManager.getSystemSettings()
 
+  const getPaymentMethodName = (method: string) => {
+    switch (method) {
+      case "cash":
+        return "Efectivo"
+      case "card":
+        return "Tarjeta"
+      case "credit":
+        return "Crédito"
+      default:
+        return "Efectivo"
+    }
+  }
+
   return (
     <div className="receipt-font text-xs leading-tight space-y-1">
       {/* Business Header */}
@@ -221,7 +234,7 @@ function ReceiptPreview({ sale, businessInfo }: ReceiptPreviewProps) {
       <div className="border-t border-dashed border-gray-400 pt-2 mt-2">
         <div className="flex justify-between">
           <span>Método de pago:</span>
-          <span>{sale.paymentMethod === "cash" ? "Efectivo" : "Tarjeta"}</span>
+          <span>{getPaymentMethodName(sale.paymentMethod)}</span>
         </div>
         {sale.paymentMethod === "cash" && (
           <>
@@ -232,6 +245,22 @@ function ReceiptPreview({ sale, businessInfo }: ReceiptPreviewProps) {
             <div className="flex justify-between">
               <span>Cambio:</span>
               <span>{SalesManager.formatCurrency(sale.change)}</span>
+            </div>
+          </>
+        )}
+        {sale.paymentMethod === "credit" && sale.customerInfo && (
+          <>
+            <div className="flex justify-between">
+              <span>Cliente:</span>
+              <span>{sale.customerInfo.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Correo:</span>
+              <span className="text-xs">{sale.customerInfo.email}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>ID Carnet:</span>
+              <span>{sale.customerInfo.idCard}</span>
             </div>
           </>
         )}
@@ -264,6 +293,19 @@ function generateReceiptHTML(
 ): string {
   const settingsManager = SettingsManager.getInstance()
   const systemSettings = settingsManager.getSystemSettings()
+
+  const getPaymentMethodName = (method: string) => {
+    switch (method) {
+      case "cash":
+        return "Efectivo"
+      case "card":
+        return "Tarjeta"
+      case "credit":
+        return "Crédito"
+      default:
+        return "Efectivo"
+    }
+  }
 
   const styles = `
     <style>
@@ -331,6 +373,24 @@ function generateReceiptHTML(
   const footerContent = systemSettings.receiptFooter
     ? `<div class="whitespace-pre-line">${systemSettings.receiptFooter}</div>`
     : `<div>¡Gracias por su compra!</div><div>Conserve su ticket</div>`
+
+  const customerInfoHTML =
+    sale.paymentMethod === "credit" && sale.customerInfo
+      ? `
+        <div class="flex">
+          <span>Cliente:</span>
+          <span>${sale.customerInfo.name}</span>
+        </div>
+        <div class="flex">
+          <span>Correo:</span>
+          <span style="font-size: 10px;">${sale.customerInfo.email}</span>
+        </div>
+        <div class="flex">
+          <span>ID Carnet:</span>
+          <span>${sale.customerInfo.idCard}</span>
+        </div>
+      `
+      : ""
 
   const receiptContent = `
     <div class="receipt">
@@ -402,7 +462,8 @@ function generateReceiptHTML(
       <div style="border-top: 1px dashed #666; padding-top: 8px; margin-top: 8px;">
         <div class="flex">
           <span>Método de pago:</span>
-          <span>${sale.paymentMethod === "cash" ? "Efectivo" : "Tarjeta"}</span>
+          <!-- usar función para obtener nombre correcto del método de pago -->
+          <span>${getPaymentMethodName(sale.paymentMethod)}</span>
         </div>
         ${
           sale.paymentMethod === "cash"
@@ -418,6 +479,8 @@ function generateReceiptHTML(
         `
             : ""
         }
+        <!-- agregar información del cliente para crédito -->
+        ${customerInfoHTML}
       </div>
 
       <!-- Footer -->
