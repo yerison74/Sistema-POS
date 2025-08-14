@@ -14,6 +14,8 @@ import { SalesManager, type SaleItem, type Sale } from "@/lib/sales"
 import { BarcodeScanner } from "@/lib/barcode-scanner"
 import { SettingsManager } from "@/lib/settings"
 import { ReceiptPrinter } from "@/components/receipt-printer"
+import { CustomerSelector } from "@/components/customer-selector"
+import { CustomerManager, type Customer } from "@/lib/customers"
 import {
   Search,
   Plus,
@@ -39,14 +41,12 @@ export function SalesSystem() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "credit">("cash")
   const [amountPaid, setAmountPaid] = useState(0)
-  const [customerName, setCustomerName] = useState("")
-  const [customerEmail, setCustomerEmail] = useState("")
-  const [customerIdCard, setCustomerIdCard] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [lastSale, setLastSale] = useState<Sale | null>(null)
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false)
   const [saleCompleted, setSaleCompleted] = useState(false)
   const [barcodeEnabled, setBarcodeEnabled] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   const { toast } = useToast()
   const { user } = useAuth()
@@ -221,9 +221,7 @@ export function SalesSystem() {
   const clearCart = () => {
     setCart([])
     setSaleCompleted(false)
-    setCustomerName("")
-    setCustomerEmail("")
-    setCustomerIdCard("")
+    setSelectedCustomer(null)
   }
 
   const { subtotal, tax, total } = salesManager.calculateSaleTotal(cart)
@@ -246,10 +244,10 @@ export function SalesSystem() {
     }
 
     if (paymentMethod === "credit") {
-      if (!customerName.trim() || !customerEmail.trim() || !customerIdCard.trim()) {
+      if (!selectedCustomer) {
         toast({
           title: "Error",
-          description: "Todos los campos del cliente son obligatorios para ventas a crédito",
+          description: "Debe seleccionar un cliente para ventas a crédito",
         })
         return
       }
@@ -258,14 +256,13 @@ export function SalesSystem() {
     setIsProcessing(true)
 
     try {
-      const customerInfo =
-        paymentMethod === "credit"
-          ? {
-              name: customerName,
-              email: customerEmail,
-              idCard: customerIdCard,
-            }
-          : undefined
+      const customerInfo = selectedCustomer
+        ? {
+            name: selectedCustomer.name,
+            email: selectedCustomer.email,
+            idCard: selectedCustomer.idCard,
+          }
+        : undefined
 
       const sale = salesManager.processSale(
         cart,
@@ -275,6 +272,10 @@ export function SalesSystem() {
         user?.name || "Cajero",
         customerInfo,
       )
+
+      if (selectedCustomer) {
+        CustomerManager.updateCustomerPurchase(selectedCustomer.id, total)
+      }
 
       setLastSale(sale)
       clearCart()
@@ -505,48 +506,12 @@ export function SalesSystem() {
               </Select>
             </div>
 
-            {paymentMethod === "credit" && (
-              <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <Label className="text-sm font-medium text-blue-800">Información del Cliente</Label>
-                <div>
-                  <Label htmlFor="customerName" className="text-xs">
-                    Nombre del Cliente *
-                  </Label>
-                  <Input
-                    id="customerName"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Nombre completo del cliente"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="customerEmail" className="text-xs">
-                    Correo del Cliente *
-                  </Label>
-                  <Input
-                    id="customerEmail"
-                    type="email"
-                    value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    placeholder="correo@ejemplo.com"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="customerIdCard" className="text-xs">
-                    ID del Carnet *
-                  </Label>
-                  <Input
-                    id="customerIdCard"
-                    value={customerIdCard}
-                    onChange={(e) => setCustomerIdCard(e.target.value)}
-                    placeholder="Número de cédula o identificación"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            )}
+            <CustomerSelector
+              selectedCustomer={selectedCustomer}
+              onCustomerSelect={setSelectedCustomer}
+              required={paymentMethod === "credit"}
+              label={paymentMethod === "credit" ? "Cliente (Obligatorio)" : "Cliente (Opcional)"}
+            />
 
             {paymentMethod === "cash" && (
               <div>
@@ -575,7 +540,11 @@ export function SalesSystem() {
               <Button
                 className="flex-1 bg-green-600 hover:bg-green-700"
                 onClick={handlePayment}
-                disabled={isProcessing || (paymentMethod === "cash" && amountPaid < total)}
+                disabled={
+                  isProcessing ||
+                  (paymentMethod === "cash" && amountPaid < total) ||
+                  (paymentMethod === "credit" && !selectedCustomer)
+                }
               >
                 {isProcessing ? "Procesando..." : "Confirmar Pago"}
               </Button>

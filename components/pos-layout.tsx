@@ -3,11 +3,12 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
-import { LogOut, User, Store, Package, BarChart3, Settings } from "lucide-react"
+import { LogOut, User, Store, Package, BarChart3, Settings, Users } from "lucide-react"
 import { InventoryManagement } from "@/components/inventory-management"
 import { SalesSystem } from "@/components/sales-system"
 import ReportsDashboard from "@/components/reports-dashboard"
 import { SettingsPanel } from "@/components/settings-panel"
+import CustomerManagement from "@/components/customer-management"
 
 export function POSLayout() {
   const { logout, user } = useAuth()
@@ -16,6 +17,7 @@ export function POSLayout() {
   const tabs = [
     { id: "sales", label: "Ventas", icon: Store },
     { id: "inventory", label: "Inventario", icon: Package },
+    { id: "customers", label: "Clientes", icon: Users },
     { id: "reports", label: "Reportes", icon: BarChart3 },
     { id: "settings", label: "Configuración", icon: Settings },
   ]
@@ -79,9 +81,10 @@ export function POSLayout() {
 
         {activeTab === "inventory" && <InventoryManagement />}
 
+        {activeTab === "customers" && <CustomerManagement />}
+
         {activeTab === "reports" && <ReportsDashboard />}
 
-        {/* replaced placeholder with full settings panel */}
         {activeTab === "settings" && <SettingsPanel />}
       </main>
     </div>
