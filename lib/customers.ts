@@ -5,6 +5,7 @@ export interface Customer {
   phone: string
   idCard: string
   address?: string
+  password: string
   createdAt: number
   totalPurchases: number
   totalSpent: number
@@ -135,5 +136,10 @@ export class CustomerManager {
       month: "short",
       day: "numeric",
     })
+  }
+
+  static validateCustomerPassword(customerId: string, password: string): boolean {
+    const customer = this.getCustomerById(customerId)
+    return customer ? customer.password === password : false
   }
 }

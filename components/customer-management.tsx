@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/hooks/use-toast"
 import { CustomerManager, type Customer } from "@/lib/customers"
-import { Search, Plus, Edit, Trash2, User, Mail, Phone, CreditCard } from "lucide-react"
+import { Search, Plus, Edit, Trash2, User, Mail, Phone, CreditCard, Lock } from "lucide-react"
 
 export default function CustomerManagement() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -25,6 +25,7 @@ export default function CustomerManagement() {
     phone: "",
     idCard: "",
     address: "",
+    password: "", // Añadido campo de contraseña
   })
 
   useEffect(() => {
@@ -52,15 +53,22 @@ export default function CustomerManagement() {
       phone: "",
       idCard: "",
       address: "",
+      password: "", // Incluir contraseña en reset
     })
   }
 
   const handleAddCustomer = () => {
     try {
-      if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim() || !formData.idCard.trim()) {
+      if (
+        !formData.name.trim() ||
+        !formData.email.trim() ||
+        !formData.phone.trim() ||
+        !formData.idCard.trim() ||
+        !formData.password.trim()
+      ) {
         toast({
           title: "Campos requeridos",
-          description: "Por favor complete todos los campos obligatorios",
+          description: "Por favor complete todos los campos obligatorios incluyendo la contraseña", // Actualizado mensaje
         })
         return
       }
@@ -88,11 +96,12 @@ export default function CustomerManagement() {
         !formData.name.trim() ||
         !formData.email.trim() ||
         !formData.phone.trim() ||
-        !formData.idCard.trim()
+        !formData.idCard.trim() ||
+        !formData.password.trim() // Validar contraseña en edición
       ) {
         toast({
           title: "Campos requeridos",
-          description: "Por favor complete todos los campos obligatorios",
+          description: "Por favor complete todos los campos obligatorios incluyendo la contraseña", // Actualizado mensaje
         })
         return
       }
@@ -140,6 +149,7 @@ export default function CustomerManagement() {
       phone: customer.phone,
       idCard: customer.idCard,
       address: customer.address || "",
+      password: customer.password, // Incluir contraseña en edición
     })
     setIsEditDialogOpen(true)
   }
@@ -205,6 +215,20 @@ export default function CustomerManagement() {
                   onChange={(e) => setFormData((prev) => ({ ...prev, idCard: e.target.value }))}
                   placeholder="123-4567890-1"
                 />
+              </div>
+              <div>
+                <Label htmlFor="password">Contraseña *</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="Contraseña del cliente"
+                    className="pl-10"
+                  />
+                </div>
               </div>
               <div>
                 <Label htmlFor="address">Dirección (Opcional)</Label>
@@ -428,6 +452,20 @@ export default function CustomerManagement() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, idCard: e.target.value }))}
                 placeholder="123-4567890-1"
               />
+            </div>
+            <div>
+              <Label htmlFor="edit-password">Contraseña *</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  id="edit-password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="Contraseña del cliente"
+                  className="pl-10"
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="edit-address">Dirección (Opcional)</Label>

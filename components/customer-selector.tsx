@@ -35,6 +35,7 @@ export function CustomerSelector({
     phone: "",
     idCard: "",
     address: "",
+    password: "",
   })
 
   useEffect(() => {
@@ -53,15 +54,22 @@ export function CustomerSelector({
       phone: "",
       idCard: "",
       address: "",
+      password: "",
     })
   }
 
   const handleAddCustomer = () => {
     try {
-      if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim() || !formData.idCard.trim()) {
+      if (
+        !formData.name.trim() ||
+        !formData.email.trim() ||
+        !formData.phone.trim() ||
+        !formData.idCard.trim() ||
+        !formData.password.trim()
+      ) {
         toast({
           title: "Campos requeridos",
-          description: "Por favor complete todos los campos obligatorios",
+          description: "Por favor complete todos los campos obligatorios incluyendo la contraseña",
         })
         return
       }
@@ -266,6 +274,16 @@ export function CustomerSelector({
                 value={formData.idCard}
                 onChange={(e) => setFormData((prev) => ({ ...prev, idCard: e.target.value }))}
                 placeholder="123-4567890-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">Contraseña *</Label>
+              <Input
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                placeholder="Contraseña del cliente"
               />
             </div>
             <div>

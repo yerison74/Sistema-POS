@@ -30,6 +30,7 @@ import {
   Printer,
   CheckCircle,
   Zap,
+  Lock,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/auth-provider"
@@ -47,6 +48,8 @@ export function SalesSystem() {
   const [saleCompleted, setSaleCompleted] = useState(false)
   const [barcodeEnabled, setBarcodeEnabled] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
+  const [customerPassword, setCustomerPassword] = useState("")
 
   const { toast } = useToast()
   const { user } = useAuth()
@@ -56,16 +59,13 @@ export function SalesSystem() {
   const settingsManager = SettingsManager.getInstance()
 
   useEffect(() => {
-    // Load settings
     const systemSettings = settingsManager.getSystemSettings()
     setBarcodeEnabled(systemSettings.barcodeEnabled)
 
-    // Setup barcode scanner if enabled
     if (systemSettings.barcodeEnabled) {
       barcodeScanner.startListening(handleBarcodeScanned)
     }
 
-    // Setup keyboard shortcuts
     if (systemSettings.keyboardShortcuts) {
       setupKeyboardShortcuts()
     }
@@ -86,7 +86,6 @@ export function SalesSystem() {
 
   const setupKeyboardShortcuts = () => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      // Only handle shortcuts when not typing in input fields
       const target = event.target as HTMLElement
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return
 
@@ -124,7 +123,6 @@ export function SalesSystem() {
   const handleBarcodeScanned = (code: string) => {
     if (saleCompleted) return
 
-    // Try to find product by code
     const product = inventoryManager.getProductByCode(code)
 
     if (product) {
@@ -134,7 +132,6 @@ export function SalesSystem() {
         description: `${product.name} agregado al carrito`,
       })
     } else {
-      // If not found, set as search query
       setSearchQuery(code)
       toast({
         title: "Código no encontrado",
@@ -251,8 +248,32 @@ export function SalesSystem() {
         })
         return
       }
+      setIsPasswordDialogOpen(true)
+      return
     }
 
+    await processSale()
+  }
+
+  const handlePasswordValidation = async () => {
+    if (!selectedCustomer) return
+
+    const isValidPassword = CustomerManager.validateCustomerPassword(selectedCustomer.id, customerPassword)
+
+    if (!isValidPassword) {
+      toast({
+        title: "Contraseña incorrecta",
+        description: "La contraseña del cliente no es válida",
+      })
+      return
+    }
+
+    setIsPasswordDialogOpen(false)
+    setCustomerPassword("")
+    await processSale()
+  }
+
+  const processSale = async () => {
     setIsProcessing(true)
 
     try {
@@ -307,7 +328,6 @@ export function SalesSystem() {
   return (
     <div className="pos-grid">
       <div className="flex flex-col h-full bg-white">
-        {/* Keyboard shortcuts info */}
         <div className="bg-blue-50 border-b border-blue-200 p-2 text-xs text-blue-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -553,6 +573,59 @@ export function SalesSystem() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Validación de Cliente</DialogTitle>
+            <DialogDescription>
+              Ingrese la contraseña de {selectedCustomer?.name} para confirmar la venta a crédito
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="customerPassword">Contraseña del Cliente</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  id="customerPassword"
+                  type="password"
+                  value={customerPassword}
+                  onChange={(e) => setCustomerPassword(e.target.value)}
+                  placeholder="Contraseña"
+                  className="pl-10"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && customerPassword.trim()) {
+                      handlePasswordValidation()
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                className="flex-1 bg-transparent"
+                onClick={() => {
+                  setIsPasswordDialogOpen(false)
+                  setCustomerPassword("")
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                onClick={handlePasswordValidation}
+                disabled={!customerPassword.trim() || isProcessing}
+              >
+                {isProcessing ? "Validando..." : "Validar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ReceiptPrinter
         sale={lastSale}
         isOpen={isReceiptDialogOpen}
@@ -562,8 +635,6 @@ export function SalesSystem() {
     </div>
   )
 }
-
-// ... existing ProductSearchResult and CartItem components remain the same ...
 
 interface ProductSearchResultProps {
   product: Product
