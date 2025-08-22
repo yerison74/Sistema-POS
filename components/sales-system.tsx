@@ -279,6 +279,7 @@ export function SalesSystem() {
     try {
       const customerInfo = selectedCustomer
         ? {
+            id: selectedCustomer.id,
             name: selectedCustomer.name,
             email: selectedCustomer.email,
             idCard: selectedCustomer.idCard,

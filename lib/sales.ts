@@ -11,6 +11,7 @@ export interface SaleItem {
 }
 
 export interface CustomerInfo {
+  id: string // Agregando campo id para identificar al cliente
   name: string
   email: string
   idCard: string

@@ -10,8 +10,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SalesManager, type Sale, type DailySales } from "@/lib/sales"
 import { InventoryManager, type Product } from "@/lib/inventory"
+import { CustomerManager, type Customer } from "@/lib/customers"
 import { printReceipt } from "@/components/receipt-printer"
-import { TrendingUp, DollarSign, ShoppingCart, CreditCard, Banknote, Download, RefreshCw, Printer } from "lucide-react"
+import {
+  TrendingUp,
+  DollarSign,
+  ShoppingCart,
+  CreditCard,
+  Banknote,
+  Download,
+  RefreshCw,
+  Printer,
+  Users,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { SettingsManager } from "@/lib/settings"
 
@@ -46,6 +57,15 @@ interface WeeklyStats {
   average: number
 }
 
+interface CustomerConsumption {
+  customer: Customer
+  totalAmount: number
+  creditAmount: number
+  salesCount: number
+  creditSalesCount: number
+  sales: Sale[]
+}
+
 export default function ReportsDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7))
@@ -55,6 +75,11 @@ export default function ReportsDashboard() {
     const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()))
     return startOfWeek.toISOString().split("T")[0]
   })
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [customRangeSales, setCustomRangeSales] = useState<Sale[]>([])
+  const [customerConsumption, setCustomerConsumption] = useState<CustomerConsumption[]>([])
+
   const [dailySales, setDailySales] = useState<DailySales | null>(null)
   const [monthlySales, setMonthlySales] = useState<Sale[]>([])
   const [topProducts, setTopProducts] = useState<ProductSalesStats[]>([])
@@ -68,26 +93,49 @@ export default function ReportsDashboard() {
   const salesManager = SalesManager.getInstance()
   const inventoryManager = InventoryManager.getInstance()
   const settingsManager = SettingsManager.getInstance()
+  // const customerManager = CustomerManager.getInstance()
 
-  useEffect(() => {
-    loadReports()
-  }, [selectedDate, selectedMonth, selectedWeek])
-
-  const loadReports = async () => {
+  const loadReports = () => {
     setIsLoading(true)
     try {
+      const salesManager = SalesManager.getInstance()
+      const allSales = salesManager.getAllSales()
+
+      const today = new Date()
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+      const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+
+      if (!startDate) {
+        setStartDate(firstDayOfMonth.toISOString().split("T")[0])
+      }
+      if (!endDate) {
+        setEndDate(lastDayOfMonth.toISOString().split("T")[0])
+      }
+
       // Load daily sales
       const daily = salesManager.getDailySales(selectedDate)
       setDailySales(daily)
 
       // Load monthly sales
-      const allSales = salesManager.getAllSales()
       const monthlyFilter = allSales.filter((sale) => {
         const saleDate = new Date(sale.timestamp)
         const saleMonth = saleDate.toISOString().slice(0, 7)
         return saleMonth === selectedMonth
       })
       setMonthlySales(monthlyFilter)
+
+      const currentStartDate = startDate || firstDayOfMonth.toISOString().split("T")[0]
+      const currentEndDate = endDate || lastDayOfMonth.toISOString().split("T")[0]
+
+      const customFilter = allSales.filter((sale) => {
+        const saleDate = new Date(sale.timestamp).toISOString().split("T")[0]
+        return saleDate >= currentStartDate && saleDate <= currentEndDate
+      })
+      setCustomRangeSales(customFilter)
+
+      // Calculate customer consumption for the date range
+      const consumption = calculateCustomerConsumption(customFilter)
+      setCustomerConsumption(consumption)
 
       // Calculate top products
       const productStats = calculateTopProducts(monthlyFilter)
@@ -141,6 +189,48 @@ export default function ReportsDashboard() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
+    loadReports()
+  }, [selectedDate, selectedMonth, selectedWeek, startDate, endDate])
+
+  const calculateCustomerConsumption = (sales: Sale[]): CustomerConsumption[] => {
+    const customers = CustomerManager.getCustomers()
+    const consumptionMap = new Map<string, CustomerConsumption>()
+
+    // Initialize all customers
+    customers.forEach((customer) => {
+      consumptionMap.set(customer.id, {
+        customer,
+        totalAmount: 0,
+        creditAmount: 0,
+        salesCount: 0,
+        creditSalesCount: 0,
+        sales: [],
+      })
+    })
+
+    // Process sales with customer information
+    sales.forEach((sale) => {
+      if (sale.customerInfo?.id) {
+        const existing = consumptionMap.get(sale.customerInfo.id)
+        if (existing) {
+          existing.totalAmount += sale.total
+          existing.salesCount += 1
+          existing.sales.push(sale)
+
+          if (sale.paymentMethod === "credit") {
+            existing.creditAmount += sale.total
+            existing.creditSalesCount += 1
+          }
+        }
+      }
+    })
+
+    return Array.from(consumptionMap.values())
+      .filter((consumption) => consumption.salesCount > 0)
+      .sort((a, b) => b.creditAmount - a.creditAmount)
   }
 
   const calculateTopProducts = (sales: Sale[]): ProductSalesStats[] => {
@@ -266,6 +356,56 @@ export default function ReportsDashboard() {
     })
   }
 
+  const exportCustomerReport = () => {
+    if (customerConsumption.length === 0) return
+
+    const csvContent = [
+      `Reporte de Consumo por Cliente - ${startDate} a ${endDate}`,
+      "",
+      "Resumen por Cliente",
+      "Cliente,Email,Teléfono,Total Consumido,Deuda a Crédito,Ventas Totales,Ventas a Crédito",
+      ...customerConsumption.map((consumption) =>
+        [
+          consumption.customer.name,
+          consumption.customer.email,
+          consumption.customer.phone,
+          SalesManager.formatCurrency(consumption.totalAmount).replace(",", ""),
+          SalesManager.formatCurrency(consumption.creditAmount).replace(",", ""),
+          consumption.salesCount,
+          consumption.creditSalesCount,
+        ].join(","),
+      ),
+      "",
+      "Detalle de Ventas por Cliente",
+      "Cliente,ID Venta,Fecha,Hora,Total,Método de Pago",
+      ...customerConsumption.flatMap((consumption) =>
+        consumption.sales.map((sale) =>
+          [
+            consumption.customer.name,
+            sale.id,
+            SalesManager.formatDateTime(sale.timestamp).split(" ")[0],
+            SalesManager.formatTime(sale.timestamp),
+            SalesManager.formatCurrency(sale.total).replace(",", ""),
+            getPaymentMethodName(sale.paymentMethod),
+          ].join(","),
+        ),
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `reporte-clientes-${startDate}-${endDate}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+
+    toast({
+      title: "Reporte de clientes exportado",
+      description: "El reporte de consumo por cliente se ha descargado correctamente",
+    })
+  }
+
   const handleReprintReceipt = (sale: Sale) => {
     try {
       const businessSettings = settingsManager.getBusinessSettings()
@@ -311,12 +451,12 @@ export default function ReportsDashboard() {
         </Button>
       </div>
 
-      {/* Added weekly tab to the tabs list */}
       <Tabs defaultValue="daily" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="daily">Diario</TabsTrigger>
           <TabsTrigger value="weekly">Semanal</TabsTrigger>
           <TabsTrigger value="monthly">Mensual</TabsTrigger>
+          <TabsTrigger value="custom">Por Cliente</TabsTrigger>
         </TabsList>
 
         <TabsContent value="daily" className="space-y-6">
@@ -715,6 +855,203 @@ export default function ReportsDashboard() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="custom" className="space-y-6">
+          <div className="flex items-center gap-4">
+            <div>
+              <Label htmlFor="startDate">Fecha Inicio</Label>
+              <Input
+                id="startDate"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div>
+              <Label htmlFor="endDate">Fecha Fin</Label>
+              <Input
+                id="endDate"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <Button onClick={exportCustomerReport} disabled={customerConsumption.length === 0} className="mt-6">
+              <Download className="w-4 h-4 mr-2" />
+              Exportar CSV
+            </Button>
+          </div>
+
+          {isLoading ? (
+            <div className="text-center py-8">Cargando reportes de clientes...</div>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Clientes Activos</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{customerConsumption.length}</div>
+                    <p className="text-xs text-muted-foreground">con compras en el período</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Ventas</CardTitle>
+                    <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{customRangeSales.length}</div>
+                    <p className="text-xs text-muted-foreground">transacciones</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Ingresos</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {SalesManager.formatCurrency(customRangeSales.reduce((sum, sale) => sum + sale.total, 0))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">en el período</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Deuda Total</CardTitle>
+                    <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {SalesManager.formatCurrency(customerConsumption.reduce((sum, c) => sum + c.creditAmount, 0))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">ventas a crédito</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    Consumo por Cliente ({startDate} - {endDate})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {customerConsumption.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                      <p>No hay ventas con clientes registrados en este período</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Cliente</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Teléfono</TableHead>
+                            <TableHead>Total Consumido</TableHead>
+                            <TableHead>Deuda a Crédito</TableHead>
+                            <TableHead>Ventas Totales</TableHead>
+                            <TableHead>Ventas a Crédito</TableHead>
+                            <TableHead>Estado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {customerConsumption.map((consumption) => (
+                            <TableRow key={consumption.customer.id}>
+                              <TableCell className="font-medium">{consumption.customer.name}</TableCell>
+                              <TableCell>{consumption.customer.email}</TableCell>
+                              <TableCell>{consumption.customer.phone}</TableCell>
+                              <TableCell className="font-mono">
+                                {SalesManager.formatCurrency(consumption.totalAmount)}
+                              </TableCell>
+                              <TableCell className="font-mono font-bold text-red-600">
+                                {SalesManager.formatCurrency(consumption.creditAmount)}
+                              </TableCell>
+                              <TableCell>{consumption.salesCount}</TableCell>
+                              <TableCell>{consumption.creditSalesCount}</TableCell>
+                              <TableCell>
+                                <Badge variant={consumption.creditAmount > 0 ? "destructive" : "default"}>
+                                  {consumption.creditAmount > 0 ? "Debe" : "Al día"}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {customerConsumption.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Detalle de Ventas por Cliente</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {customerConsumption.map((consumption) => (
+                        <div key={consumption.customer.id} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="font-semibold text-lg">{consumption.customer.name}</h4>
+                              <p className="text-sm text-muted-foreground">{consumption.customer.email}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-lg">
+                                Debe: {SalesManager.formatCurrency(consumption.creditAmount)}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Total: {SalesManager.formatCurrency(consumption.totalAmount)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {consumption.sales.map((sale) => (
+                              <div key={sale.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                <div>
+                                  <div className="font-medium">Venta #{sale.id.slice(-6)}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {SalesManager.formatDateTime(sale.timestamp)} -{" "}
+                                    {getPaymentMethodName(sale.paymentMethod)}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className={`font-bold ${sale.paymentMethod === "credit" ? "text-red-600" : ""}`}>
+                                    {SalesManager.formatCurrency(sale.total)}
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleReprintReceipt(sale)}
+                                    className="text-xs"
+                                  >
+                                    Reimprimir
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
