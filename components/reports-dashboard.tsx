@@ -199,7 +199,6 @@ export default function ReportsDashboard() {
     const customers = CustomerManager.getCustomers()
     const consumptionMap = new Map<string, CustomerConsumption>()
 
-    // Initialize all customers
     customers.forEach((customer) => {
       consumptionMap.set(customer.id, {
         customer,
@@ -211,19 +210,42 @@ export default function ReportsDashboard() {
       })
     })
 
-    // Process sales with customer information
     sales.forEach((sale) => {
       if (sale.customerInfo?.id) {
-        const existing = consumptionMap.get(sale.customerInfo.id)
-        if (existing) {
-          existing.totalAmount += sale.total
-          existing.salesCount += 1
-          existing.sales.push(sale)
+        let existing = consumptionMap.get(sale.customerInfo.id)
 
-          if (sale.paymentMethod === "credit") {
-            existing.creditAmount += sale.total
-            existing.creditSalesCount += 1
+        // If customer doesn't exist (was deleted), create entry from saved customer info
+        if (!existing) {
+          const deletedCustomer: Customer = {
+            id: sale.customerInfo.id,
+            name: sale.customerInfo.name,
+            email: sale.customerInfo.email,
+            phone: "", // Not available in customerInfo
+            idCard: sale.customerInfo.idCard,
+            password: "", // Not available in customerInfo
+            createdAt: 0, // Not available in customerInfo
+            totalPurchases: 0,
+            lastPurchase: sale.timestamp,
           }
+
+          existing = {
+            customer: deletedCustomer,
+            totalAmount: 0,
+            creditAmount: 0,
+            salesCount: 0,
+            creditSalesCount: 0,
+            sales: [],
+          }
+          consumptionMap.set(sale.customerInfo.id, existing)
+        }
+
+        existing.totalAmount += sale.total
+        existing.salesCount += 1
+        existing.sales.push(sale)
+
+        if (sale.paymentMethod === "credit") {
+          existing.creditAmount += sale.total
+          existing.creditSalesCount += 1
         }
       }
     })
@@ -441,6 +463,85 @@ export default function ReportsDashboard() {
     }
   }
 
+  // Added CSV export functions for weekly and monthly reports
+  const exportWeeklyReport = () => {
+    const csvContent = [
+      `Reporte Semanal - Semana del ${selectedWeek}`,
+      "",
+      "Resumen de la Semana",
+      `Total de Ventas: ${weeklySales?.count || 0}`,
+      `Ingresos Totales: ${SalesManager.formatCurrency(weeklySales?.total || 0)}`,
+      `Efectivo: ${SalesManager.formatCurrency(weeklySales?.cash || 0)}`,
+      `Tarjeta: ${SalesManager.formatCurrency(weeklySales?.card || 0)}`,
+      `Crédito: ${SalesManager.formatCurrency(weeklySales?.credit || 0)}`,
+      "",
+      "Detalle de Ventas",
+      "ID Venta,Fecha,Hora,Total,Método de Pago,Cliente",
+      ...(weeklySales?.sales || []).map((sale) =>
+        [
+          sale.id,
+          SalesManager.formatDateTime(sale.timestamp).split(" ")[0],
+          SalesManager.formatTime(sale.timestamp),
+          SalesManager.formatCurrency(sale.total).replace(",", ""),
+          getPaymentMethodName(sale.paymentMethod),
+          sale.customerInfo?.name || "Sin cliente",
+        ].join(","),
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `reporte-semanal-${selectedWeek}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+
+    toast({
+      title: "Reporte semanal exportado",
+      description: "El reporte semanal se ha descargado correctamente",
+    })
+  }
+
+  const exportMonthlyReport = () => {
+    const csvContent = [
+      `Reporte Mensual - ${selectedMonth}`,
+      "",
+      "Resumen del Mes",
+      `Total de Ventas: ${monthlySales.length}`,
+      `Ingresos Totales: ${SalesManager.formatCurrency(monthlySales.reduce((sum, sale) => sum + sale.total, 0))}`,
+      `Efectivo: ${SalesManager.formatCurrency(monthlySales.filter((s) => s.paymentMethod === "cash").reduce((sum, sale) => sum + sale.total, 0))}`,
+      `Tarjeta: ${SalesManager.formatCurrency(monthlySales.filter((s) => s.paymentMethod === "card").reduce((sum, sale) => sum + sale.total, 0))}`,
+      `Crédito: ${SalesManager.formatCurrency(monthlySales.filter((s) => s.paymentMethod === "credit").reduce((sum, sale) => sum + sale.total, 0))}`,
+      "",
+      "Detalle de Ventas",
+      "ID Venta,Fecha,Hora,Total,Método de Pago,Cliente",
+      ...monthlySales.map((sale) =>
+        [
+          sale.id,
+          SalesManager.formatDateTime(sale.timestamp).split(" ")[0],
+          SalesManager.formatTime(sale.timestamp),
+          SalesManager.formatCurrency(sale.total).replace(",", ""),
+          getPaymentMethodName(sale.paymentMethod),
+          sale.customerInfo?.name || "Sin cliente",
+        ].join(","),
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `reporte-mensual-${selectedMonth}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+
+    toast({
+      title: "Reporte mensual exportado",
+      description: "El reporte mensual se ha descargado correctamente",
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -600,7 +701,7 @@ export default function ReportsDashboard() {
 
         {/* Added complete weekly reports tab */}
         <TabsContent value="weekly" className="space-y-6">
-          <div>
+          <div className="flex items-center justify-between">
             <Label htmlFor="week">Semana (inicio)</Label>
             <Input
               id="week"
@@ -609,6 +710,11 @@ export default function ReportsDashboard() {
               onChange={(e) => setSelectedWeek(e.target.value)}
               className="w-40"
             />
+            {/* Added export button for weekly reports */}
+            <Button onClick={exportWeeklyReport} variant="outline">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar CSV
+            </Button>
           </div>
 
           {isLoading ? (
@@ -717,7 +823,9 @@ export default function ReportsDashboard() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="font-bold">{SalesManager.formatCurrency(sale.total)}</div>
+                              <div className={`font-bold ${sale.paymentMethod === "credit" ? "text-red-600" : ""}`}>
+                                {SalesManager.formatCurrency(sale.total)}
+                              </div>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -743,7 +851,7 @@ export default function ReportsDashboard() {
         </TabsContent>
 
         <TabsContent value="monthly" className="space-y-6">
-          <div>
+          <div className="flex items-center justify-between">
             <Label htmlFor="month">Mes</Label>
             <Input
               id="month"
@@ -752,6 +860,11 @@ export default function ReportsDashboard() {
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-40"
             />
+            {/* Added export button for monthly reports */}
+            <Button onClick={exportMonthlyReport} variant="outline">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar CSV
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -961,29 +1074,42 @@ export default function ReportsDashboard() {
                             <TableHead>Teléfono</TableHead>
                             <TableHead>Total Consumido</TableHead>
                             <TableHead>Deuda a Crédito</TableHead>
-                            <TableHead>Ventas Totales</TableHead>
-                            <TableHead>Ventas a Crédito</TableHead>
-                            <TableHead>Estado</TableHead>
+                            <TableHead>Ventas</TableHead>
+                            <TableHead>Acciones</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {customerConsumption.map((consumption) => (
                             <TableRow key={consumption.customer.id}>
-                              <TableCell className="font-medium">{consumption.customer.name}</TableCell>
-                              <TableCell>{consumption.customer.email}</TableCell>
-                              <TableCell>{consumption.customer.phone}</TableCell>
-                              <TableCell className="font-mono">
-                                {SalesManager.formatCurrency(consumption.totalAmount)}
+                              <TableCell className="font-medium">
+                                {consumption.customer.name}
+                                {!CustomerManager.getCustomers().find((c) => c.id === consumption.customer.id) && (
+                                  <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                    Cliente eliminado
+                                  </span>
+                                )}
                               </TableCell>
-                              <TableCell className="font-mono font-bold text-red-600">
+                              <TableCell>{consumption.customer.email}</TableCell>
+                              <TableCell>{consumption.customer.phone || "N/A"}</TableCell>
+                              <TableCell>{SalesManager.formatCurrency(consumption.totalAmount)}</TableCell>
+                              <TableCell className={consumption.creditAmount > 0 ? "text-red-600 font-semibold" : ""}>
                                 {SalesManager.formatCurrency(consumption.creditAmount)}
                               </TableCell>
-                              <TableCell>{consumption.salesCount}</TableCell>
-                              <TableCell>{consumption.creditSalesCount}</TableCell>
                               <TableCell>
-                                <Badge variant={consumption.creditAmount > 0 ? "destructive" : "default"}>
-                                  {consumption.creditAmount > 0 ? "Debe" : "Al día"}
-                                </Badge>
+                                {consumption.salesCount} total
+                                {consumption.creditSalesCount > 0 && (
+                                  <span className="text-red-600 ml-2">({consumption.creditSalesCount} a crédito)</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleReprintReceipt(consumption.sales[0])}
+                                  className="h-8"
+                                >
+                                  <Printer className="w-3 h-3" />
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -1010,7 +1136,7 @@ export default function ReportsDashboard() {
                             </div>
                             <div className="text-right">
                               <div className="font-bold text-lg">
-                                Debe: {SalesManager.formatCurrency(consumption.creditAmount)}
+                                Deuda: {SalesManager.formatCurrency(consumption.creditAmount)}
                               </div>
                               <div className="text-sm text-muted-foreground">
                                 Total: {SalesManager.formatCurrency(consumption.totalAmount)}
