@@ -11,9 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SettingsManager, type BusinessSettings, type SystemSettings } from "@/lib/settings"
 import { BackupManager } from "@/lib/backup"
 import { BarcodeScanner } from "@/lib/barcode-scanner"
+import { UserManager, type User } from "@/lib/users"
+import { useAuth } from "@/components/auth-provider"
 import {
   Building2,
   Settings,
@@ -27,28 +31,195 @@ import {
   Keyboard,
   Shield,
   Database,
+  Users,
+  Plus,
+  Edit,
+  Trash2,
+  Key,
+  UserCheck,
+  UserX,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export function SettingsPanel() {
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({} as BusinessSettings)
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({} as SystemSettings)
+  const [users, setUsers] = useState<User[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isTestingBarcode, setIsTestingBarcode] = useState(false)
   const [lastScanResult, setLastScanResult] = useState<string>("")
 
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [userForm, setUserForm] = useState({
+    username: "",
+    password: "",
+    name: "",
+    email: "",
+    role: "cashier" as "admin" | "cashier",
+  })
+  const [passwordForm, setPasswordForm] = useState({
+    userId: "",
+    newPassword: "",
+    confirmPassword: "",
+  })
+
   const { toast } = useToast()
+  const { user: currentUser } = useAuth()
   const settingsManager = SettingsManager.getInstance()
   const backupManager = BackupManager.getInstance()
   const barcodeScanner = BarcodeScanner.getInstance()
 
   useEffect(() => {
     loadSettings()
+    loadUsers()
   }, [])
 
   const loadSettings = () => {
     setBusinessSettings(settingsManager.getBusinessSettings())
     setSystemSettings(settingsManager.getSystemSettings())
+  }
+
+  const loadUsers = () => {
+    setUsers(UserManager.getUsers())
+  }
+
+  const handleCreateUser = () => {
+    setEditingUser(null)
+    setUserForm({
+      username: "",
+      password: "",
+      name: "",
+      email: "",
+      role: "cashier",
+    })
+    setIsUserDialogOpen(true)
+  }
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user)
+    setUserForm({
+      username: user.username,
+      password: "",
+      name: user.name,
+      email: user.email || "",
+      role: user.role,
+    })
+    setIsUserDialogOpen(true)
+  }
+
+  const handleSaveUser = async () => {
+    try {
+      if (editingUser) {
+        // Editar usuario existente
+        const updates: any = {
+          username: userForm.username,
+          name: userForm.name,
+          email: userForm.email,
+          role: userForm.role,
+        }
+
+        if (userForm.password) {
+          updates.password = userForm.password
+        }
+
+        UserManager.updateUser(editingUser.id, updates)
+        toast({
+          title: "Usuario actualizado",
+          description: "El usuario se ha actualizado correctamente",
+        })
+      } else {
+        // Crear nuevo usuario
+        UserManager.createUser({
+          username: userForm.username,
+          password: userForm.password,
+          name: userForm.name,
+          email: userForm.email,
+          role: userForm.role,
+          isActive: true,
+        })
+        toast({
+          title: "Usuario creado",
+          description: "El nuevo usuario se ha creado correctamente",
+        })
+      }
+
+      loadUsers()
+      setIsUserDialogOpen(false)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo guardar el usuario",
+      })
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (confirm("¿Estás seguro de que quieres eliminar este usuario?")) {
+      try {
+        UserManager.deleteUser(userId)
+        loadUsers()
+        toast({
+          title: "Usuario eliminado",
+          description: "El usuario se ha eliminado correctamente",
+        })
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "No se pudo eliminar el usuario",
+        })
+      }
+    }
+  }
+
+  const handleToggleUserStatus = async (userId: string) => {
+    try {
+      UserManager.toggleUserStatus(userId)
+      loadUsers()
+      toast({
+        title: "Estado actualizado",
+        description: "El estado del usuario se ha actualizado correctamente",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo cambiar el estado del usuario",
+      })
+    }
+  }
+
+  const handleChangePassword = (userId: string) => {
+    setPasswordForm({
+      userId,
+      newPassword: "",
+      confirmPassword: "",
+    })
+    setIsPasswordDialogOpen(true)
+  }
+
+  const handleSavePassword = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Las contraseñas no coinciden",
+      })
+      return
+    }
+
+    try {
+      UserManager.changePassword(passwordForm.userId, passwordForm.newPassword)
+      toast({
+        title: "Contraseña actualizada",
+        description: "La contraseña se ha actualizado correctamente",
+      })
+      setIsPasswordDialogOpen(false)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo cambiar la contraseña",
+      })
+    }
   }
 
   const handleSaveBusinessSettings = async () => {
@@ -195,6 +366,12 @@ export function SettingsPanel() {
             <Settings className="w-4 h-4 mr-2" />
             Sistema
           </TabsTrigger>
+          {currentUser?.role === "admin" && (
+            <TabsTrigger value="users">
+              <Users className="w-4 h-4 mr-2" />
+              Usuarios
+            </TabsTrigger>
+          )}
           <TabsTrigger value="barcode">
             <Scan className="w-4 h-4 mr-2" />
             Códigos de Barras
@@ -394,6 +571,168 @@ export function SettingsPanel() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {currentUser?.role === "admin" && (
+          <TabsContent value="users" className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Gestión de Usuarios</CardTitle>
+                <Button onClick={handleCreateUser}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo Usuario
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {users.map((user) => (
+                    <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium">{user.name}</h4>
+                          <span
+                            className={`px-2 py-1 text-xs rounded-full ${
+                              user.role === "admin" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
+                            }`}
+                          >
+                            {user.role === "admin" ? "Administrador" : "Cajero"}
+                          </span>
+                          {!user.isActive && (
+                            <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Inactivo</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600">@{user.username}</p>
+                        {user.email && <p className="text-sm text-gray-500">{user.email}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleEditUser(user)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleChangePassword(user.id)}>
+                          <Key className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleToggleUserStatus(user.id)}>
+                          {user.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Diálogo para crear/editar usuario */}
+            <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingUser ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="username">Nombre de Usuario</Label>
+                    <Input
+                      id="username"
+                      value={userForm.username}
+                      onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="name">Nombre Completo</Label>
+                    <Input
+                      id="name"
+                      value={userForm.name}
+                      onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email (Opcional)</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="role">Rol</Label>
+                    <Select
+                      value={userForm.role}
+                      onValueChange={(value: "admin" | "cashier") => setUserForm({ ...userForm, role: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cashier">Cajero</SelectItem>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="password">
+                      {editingUser ? "Nueva Contraseña (dejar vacío para no cambiar)" : "Contraseña"}
+                    </Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={userForm.password}
+                      onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                      required={!editingUser}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsUserDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleSaveUser}>{editingUser ? "Actualizar" : "Crear"}</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Diálogo para cambiar contraseña */}
+            <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Cambiar Contraseña</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="newPassword">Nueva Contraseña</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleSavePassword}>Cambiar Contraseña</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+        )}
 
         <TabsContent value="barcode" className="space-y-6">
           <Card>

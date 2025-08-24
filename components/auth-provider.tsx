@@ -1,21 +1,24 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { UserManager, type LoginCredentials, type AuthUser } from "@/lib/users"
 
 interface AuthContextType {
   isAuthenticated: boolean
-  login: (password: string) => boolean
+  login: (credentials: LoginCredentials) => boolean
   logout: () => void
-  user: { name: string; role: string } | null
+  user: AuthUser | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
 
   useEffect(() => {
+    UserManager.initializeDefaultUsers()
+
     const authStatus = localStorage.getItem("pos-auth")
     const userData = localStorage.getItem("pos-user")
 
@@ -25,19 +28,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = (password: string): boolean => {
-    const validPasswords = {
-      admin123: { name: "Administrador", role: "admin" },
-      cajero123: { name: "Cajero", role: "cashier" },
-    }
+  const login = (credentials: LoginCredentials): boolean => {
+    const authenticatedUser = UserManager.authenticateUser(credentials)
 
-    const userData = validPasswords[password as keyof typeof validPasswords]
-
-    if (userData) {
+    if (authenticatedUser) {
       setIsAuthenticated(true)
-      setUser(userData)
+      setUser(authenticatedUser)
       localStorage.setItem("pos-auth", "true")
-      localStorage.setItem("pos-user", JSON.stringify(userData))
+      localStorage.setItem("pos-user", JSON.stringify(authenticatedUser))
       return true
     }
 

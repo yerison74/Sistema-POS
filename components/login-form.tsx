@@ -9,9 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from "@/components/auth-provider"
-import { Lock, Store } from "lucide-react"
+import { Lock, Store, User } from "lucide-react"
 
 export function LoginForm() {
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -24,10 +25,10 @@ export function LoginForm() {
 
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const success = login(password)
+    const success = login({ username, password })
 
     if (!success) {
-      setError("Contraseña incorrecta. Intenta con: admin123 o cajero123")
+      setError("Usuario o contraseña incorrectos. Intenta con: admin/admin123 o cajero/cajero123")
     }
 
     setIsLoading(false)
@@ -41,10 +42,26 @@ export function LoginForm() {
             <Store className="w-8 h-8 text-white" />
           </div>
           <CardTitle className="text-2xl font-bold text-gray-900">Sistema POS</CardTitle>
-          <CardDescription>Ingresa tu contraseña para acceder al punto de venta</CardDescription>
+          <CardDescription>Ingresa tu usuario y contraseña para acceder al punto de venta</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Usuario</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Ingresa tu usuario"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
               <div className="relative">
@@ -75,10 +92,10 @@ export function LoginForm() {
           <div className="mt-6 text-sm text-gray-600 text-center">
             <p className="font-medium mb-2">Credenciales de prueba:</p>
             <p>
-              Administrador: <code className="bg-gray-100 px-2 py-1 rounded">admin123</code>
+              Administrador: <code className="bg-gray-100 px-2 py-1 rounded">admin / admin123</code>
             </p>
             <p>
-              Cajero: <code className="bg-gray-100 px-2 py-1 rounded">cajero123</code>
+              Cajero: <code className="bg-gray-100 px-2 py-1 rounded">cajero / cajero123</code>
             </p>
           </div>
         </CardContent>
