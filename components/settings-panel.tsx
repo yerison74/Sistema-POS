@@ -17,6 +17,7 @@ import { SettingsManager, type BusinessSettings, type SystemSettings } from "@/l
 import { BackupManager } from "@/lib/backup"
 import { BarcodeScanner } from "@/lib/barcode-scanner"
 import { UserManager, type User } from "@/lib/users"
+import { EmailService, type EmailConfig } from "@/lib/email-service"
 import { useAuth } from "@/components/auth-provider"
 import {
   Building2,
@@ -38,12 +39,22 @@ import {
   Key,
   UserCheck,
   UserX,
+  Mail,
+  Send,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export function SettingsPanel() {
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({} as BusinessSettings)
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({} as SystemSettings)
+  const [emailConfig, setEmailConfig] = useState<EmailConfig>({
+    serviceId: "",
+    templateId: "",
+    publicKey: "",
+    fromName: "",
+    fromEmail: "",
+    web3formsKey: "",
+  })
   const [users, setUsers] = useState<User[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isTestingBarcode, setIsTestingBarcode] = useState(false)
@@ -70,10 +81,12 @@ export function SettingsPanel() {
   const settingsManager = SettingsManager.getInstance()
   const backupManager = BackupManager.getInstance()
   const barcodeScanner = BarcodeScanner.getInstance()
+  // EmailService usa métodos estáticos, por lo que no se necesita getInstance()
 
   useEffect(() => {
     loadSettings()
     loadUsers()
+    loadEmailConfig()
   }, [])
 
   const loadSettings = () => {
@@ -83,6 +96,13 @@ export function SettingsPanel() {
 
   const loadUsers = () => {
     setUsers(UserManager.getUsers())
+  }
+
+  const loadEmailConfig = () => {
+    const config = EmailService.getConfig()
+    if (config) {
+      setEmailConfig(config)
+    }
   }
 
   const handleCreateUser = () => {
@@ -112,7 +132,6 @@ export function SettingsPanel() {
   const handleSaveUser = async () => {
     try {
       if (editingUser) {
-        // Editar usuario existente
         const updates: any = {
           username: userForm.username,
           name: userForm.name,
@@ -130,7 +149,6 @@ export function SettingsPanel() {
           description: "El usuario se ha actualizado correctamente",
         })
       } else {
-        // Crear nuevo usuario
         UserManager.createUser({
           username: userForm.username,
           password: userForm.password,
@@ -349,6 +367,50 @@ export function SettingsPanel() {
     barcodeScanner.simulateScan(testCode)
   }
 
+  const handleSaveEmailConfig = async () => {
+    setIsSaving(true)
+    try {
+      EmailService.saveConfig(emailConfig)
+      toast({
+        title: "Configuración de email guardada",
+        description: "La configuración de correo electrónico se ha actualizado correctamente",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo guardar la configuración de email",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleTestEmail = async () => {
+    if (!emailConfig.fromEmail || !emailConfig.web3formsKey) {
+      toast({
+        title: "Error",
+        description: "Complete la configuración de email antes de probar",
+      })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await EmailService.sendTestEmail()
+      toast({
+        title: "Email de prueba enviado",
+        description: "Revisa tu bandeja de entrada para confirmar que funciona",
+      })
+    } catch (error) {
+      toast({
+        title: "Error al enviar email",
+        description: error instanceof Error ? error.message : "Error al enviar el email de prueba",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -365,6 +427,10 @@ export function SettingsPanel() {
           <TabsTrigger value="system">
             <Settings className="w-4 h-4 mr-2" />
             Sistema
+          </TabsTrigger>
+          <TabsTrigger value="email">
+            <Mail className="w-4 h-4 mr-2" />
+            Email
           </TabsTrigger>
           {currentUser?.role === "admin" && (
             <TabsTrigger value="users">
@@ -572,6 +638,92 @@ export function SettingsPanel() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="email" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Configuración de Email</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <Mail className="h-4 w-4" />
+                <AlertDescription>
+                  Configure su servicio de email para enviar facturas automáticamente a clientes con ventas a crédito.
+                  Usando Web3Forms - más simple y confiable que EmailJS.
+                </AlertDescription>
+              </Alert>
+
+              <div>
+                <Label htmlFor="web3formsKey">Clave de Acceso Web3Forms</Label>
+                <Input
+                  id="web3formsKey"
+                  value={emailConfig.web3formsKey || ""}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, web3formsKey: e.target.value })}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="fromName">Nombre del Remitente</Label>
+                  <Input
+                    id="fromName"
+                    value={emailConfig.fromName}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, fromName: e.target.value })}
+                    placeholder="Mi Negocio POS"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="fromEmail">Email del Remitente</Label>
+                  <Input
+                    id="fromEmail"
+                    type="email"
+                    value={emailConfig.fromEmail}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, fromEmail: e.target.value })}
+                    placeholder="mi-negocio@gmail.com"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-medium">Instrucciones de configuración:</h4>
+                <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                  <li>
+                    Ve a{" "}
+                    <a
+                      href="https://web3forms.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      web3forms.com
+                    </a>
+                  </li>
+                  <li>Crea una cuenta gratuita</li>
+                  <li>Obtén tu clave de acceso (Access Key)</li>
+                  <li>Pega la clave en el campo "Clave de Acceso Web3Forms"</li>
+                  <li>Completa tu nombre y email de remitente</li>
+                  <li>¡Listo! Mucho más simple que EmailJS</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleSaveEmailConfig} disabled={isSaving} className="flex-1">
+                  <Save className="w-4 h-4 mr-2" />
+                  {isSaving ? "Guardando..." : "Guardar Configuración"}
+                </Button>
+                <Button
+                  onClick={handleTestEmail}
+                  disabled={isSaving || !emailConfig.fromEmail || !emailConfig.web3formsKey}
+                  variant="outline"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Probar Email
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {currentUser?.role === "admin" && (
           <TabsContent value="users" className="space-y-6">
             <Card>
@@ -628,7 +780,6 @@ export function SettingsPanel() {
               </CardContent>
             </Card>
 
-            {/* Diálogo para crear/editar usuario */}
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
               <DialogContent>
                 <DialogHeader>
@@ -697,7 +848,6 @@ export function SettingsPanel() {
               </DialogContent>
             </Dialog>
 
-            {/* Diálogo para cambiar contraseña */}
             <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
               <DialogContent>
                 <DialogHeader>

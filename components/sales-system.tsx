@@ -16,6 +16,7 @@ import { SettingsManager } from "@/lib/settings"
 import { ReceiptPrinter } from "@/components/receipt-printer"
 import { CustomerSelector } from "@/components/customer-selector"
 import { CustomerManager, type Customer } from "@/lib/customers"
+import { EmailService } from "@/lib/email-service"
 import {
   Search,
   Plus,
@@ -50,6 +51,8 @@ export function SalesSystem() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
   const [customerPassword, setCustomerPassword] = useState("")
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
   const { toast } = useToast()
   const { user } = useAuth()
@@ -57,6 +60,7 @@ export function SalesSystem() {
   const salesManager = SalesManager.getInstance()
   const barcodeScanner = BarcodeScanner.getInstance()
   const settingsManager = SettingsManager.getInstance()
+  // const emailService = EmailService.getInstance()
 
   useEffect(() => {
     const systemSettings = settingsManager.getSystemSettings()
@@ -306,6 +310,10 @@ export function SalesSystem() {
       setSaleCompleted(true)
       setIsReceiptDialogOpen(true)
 
+      if (paymentMethod === "credit" && selectedCustomer?.email) {
+        setIsEmailDialogOpen(true)
+      }
+
       toast({
         title: "Venta procesada",
         description: `Venta #${sale.id} procesada correctamente`,
@@ -317,6 +325,60 @@ export function SalesSystem() {
       })
     } finally {
       setIsProcessing(false)
+    }
+  }
+
+  const handleSendInvoiceEmail = async () => {
+    console.log("[v0] handleSendInvoiceEmail iniciado")
+    console.log("[v0] lastSale:", lastSale)
+    console.log("[v0] selectedCustomer:", selectedCustomer)
+
+    if (!lastSale || !lastSale.customerInfo?.email) {
+      console.log("[v0] Faltan datos - lastSale o email del cliente en customerInfo")
+      toast({
+        title: "Error",
+        description: "No se puede enviar el email. Falta información del cliente.",
+      })
+      return
+    }
+
+    setIsSendingEmail(true)
+    console.log("[v0] Estado isSendingEmail establecido a true")
+
+    try {
+      console.log("[v0] Iniciando envío de email de factura...")
+
+      const emailConfig = EmailService.getConfig()
+      console.log("[v0] Configuración de email obtenida:", emailConfig)
+
+      if (!emailConfig) {
+        console.log("[v0] No hay configuración de email")
+        toast({
+          title: "Configuración requerida",
+          description: "Configure el servicio de email en Configuración del Sistema",
+        })
+        return
+      }
+
+      console.log("[v0] Llamando a EmailService.sendInvoiceEmail...")
+      await EmailService.sendInvoiceEmail(lastSale, lastSale.customerInfo.email, lastSale.customerInfo.name)
+      console.log("[v0] Email enviado exitosamente")
+
+      toast({
+        title: "Email enviado",
+        description: `Factura enviada a ${lastSale.customerInfo.email}`,
+      })
+
+      setIsEmailDialogOpen(false)
+    } catch (error) {
+      console.log("[v0] Error al enviar email:", error)
+      toast({
+        title: "Error al enviar email",
+        description: error instanceof Error ? error.message : "Error al enviar el correo",
+      })
+    } finally {
+      console.log("[v0] Finalizando envío de email, estableciendo isSendingEmail a false")
+      setIsSendingEmail(false)
     }
   }
 
@@ -621,6 +683,54 @@ export function SalesSystem() {
                 disabled={!customerPassword.trim() || isProcessing}
               >
                 {isProcessing ? "Validando..." : "Validar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar Factura por Email</DialogTitle>
+            <DialogDescription>¿Desea enviar la factura por correo electrónico al cliente?</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {lastSale?.customerInfo && (
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <div className="text-sm">
+                  <div>
+                    <strong>Cliente:</strong> {lastSale.customerInfo.name}
+                  </div>
+                  <div>
+                    <strong>Email:</strong> {lastSale.customerInfo.email}
+                  </div>
+                  <div>
+                    <strong>Factura:</strong> #{lastSale?.id}
+                  </div>
+                  <div>
+                    <strong>Total:</strong> {lastSale && SalesManager.formatCurrency(lastSale.total)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                className="flex-1 bg-transparent"
+                onClick={() => setIsEmailDialogOpen(false)}
+                disabled={isSendingEmail}
+              >
+                Omitir
+              </Button>
+              <Button
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                onClick={handleSendInvoiceEmail}
+                disabled={isSendingEmail}
+              >
+                {isSendingEmail ? "Enviando..." : "Enviar Email"}
               </Button>
             </div>
           </div>
