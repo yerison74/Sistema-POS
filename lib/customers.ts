@@ -13,11 +13,24 @@ export interface Customer {
 
 export class CustomerManager {
   private static readonly STORAGE_KEY = "pos_customers"
+  private static cache: Customer[] | null = null
+  private static cacheTimestamp = 0
+  private static readonly CACHE_DURATION = 5000 // 5 segundos
 
   static getCustomers(): Customer[] {
     try {
+      const now = Date.now()
+      if (this.cache && now - this.cacheTimestamp < this.CACHE_DURATION) {
+        return this.cache
+      }
+
       const data = localStorage.getItem(this.STORAGE_KEY)
-      return data ? JSON.parse(data) : []
+      const customers = data ? JSON.parse(data) : []
+
+      this.cache = customers
+      this.cacheTimestamp = now
+
+      return customers
     } catch (error) {
       console.error("Error loading customers:", error)
       return []
@@ -27,15 +40,58 @@ export class CustomerManager {
   static saveCustomers(customers: Customer[]): void {
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(customers))
+      this.cache = customers
+      this.cacheTimestamp = Date.now()
     } catch (error) {
       console.error("Error saving customers:", error)
     }
   }
 
+  private static searchCache = new Map<string, Customer[]>()
+
+  static searchCustomers(query: string): Customer[] {
+    const searchTerm = query.toLowerCase().trim()
+    if (!searchTerm) return this.getCustomers()
+
+    if (this.searchCache.has(searchTerm)) {
+      return this.searchCache.get(searchTerm)!
+    }
+
+    const customers = this.getCustomers()
+
+    const exactMatches = customers.filter(
+      (customer) =>
+        customer.name.toLowerCase() === searchTerm ||
+        customer.email.toLowerCase() === searchTerm ||
+        customer.phone === query.trim() ||
+        customer.idCard === query.trim(),
+    )
+
+    let results: Customer[]
+    if (exactMatches.length > 0) {
+      results = exactMatches
+    } else {
+      results = customers.filter(
+        (customer) =>
+          customer.name.toLowerCase().includes(searchTerm) ||
+          customer.email.toLowerCase().includes(searchTerm) ||
+          customer.phone.includes(searchTerm) ||
+          customer.idCard.includes(searchTerm),
+      )
+    }
+
+    if (this.searchCache.size > 50) {
+      const firstKey = this.searchCache.keys().next().value
+      this.searchCache.delete(firstKey)
+    }
+    this.searchCache.set(searchTerm, results)
+
+    return results
+  }
+
   static addCustomer(customerData: Omit<Customer, "id" | "createdAt" | "totalPurchases" | "totalSpent">): Customer {
     const customers = this.getCustomers()
 
-    // Check if customer already exists by email or ID card
     const existingCustomer = customers.find(
       (c) => c.email.toLowerCase() === customerData.email.toLowerCase() || c.idCard === customerData.idCard,
     )
@@ -54,6 +110,7 @@ export class CustomerManager {
 
     customers.push(newCustomer)
     this.saveCustomers(customers)
+    this.searchCache.clear()
     return newCustomer
   }
 
@@ -65,7 +122,6 @@ export class CustomerManager {
       throw new Error("Cliente no encontrado")
     }
 
-    // Check for duplicates when updating email or ID card
     if (updates.email || updates.idCard) {
       const duplicate = customers.find(
         (c) =>
@@ -81,6 +137,7 @@ export class CustomerManager {
 
     customers[index] = { ...customers[index], ...updates }
     this.saveCustomers(customers)
+    this.searchCache.clear()
     return customers[index]
   }
 
@@ -88,26 +145,12 @@ export class CustomerManager {
     const customers = this.getCustomers()
     const filteredCustomers = customers.filter((c) => c.id !== id)
     this.saveCustomers(filteredCustomers)
+    this.searchCache.clear()
   }
 
   static getCustomerById(id: string): Customer | null {
     const customers = this.getCustomers()
     return customers.find((c) => c.id === id) || null
-  }
-
-  static searchCustomers(query: string): Customer[] {
-    const customers = this.getCustomers()
-    const searchTerm = query.toLowerCase().trim()
-
-    if (!searchTerm) return customers
-
-    return customers.filter(
-      (customer) =>
-        customer.name.toLowerCase().includes(searchTerm) ||
-        customer.email.toLowerCase().includes(searchTerm) ||
-        customer.phone.includes(searchTerm) ||
-        customer.idCard.includes(searchTerm),
-    )
   }
 
   static updateCustomerPurchase(customerId: string, purchaseAmount: number): void {

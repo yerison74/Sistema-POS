@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,6 +29,7 @@ export function CustomerSelector({
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<Customer[]>([])
+  const [debouncedQuery, setDebouncedQuery] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -39,15 +40,26 @@ export function CustomerSelector({
   })
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      const results = CustomerManager.searchCustomers(searchQuery)
-      setSearchResults(results.slice(0, 10))
-    } else {
-      setSearchResults(CustomerManager.getCustomers().slice(0, 10))
-    }
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(timer)
   }, [searchQuery])
 
-  const resetForm = () => {
+  const memoizedSearchResults = useMemo(() => {
+    if (debouncedQuery.trim()) {
+      return CustomerManager.searchCustomers(debouncedQuery).slice(0, 10)
+    } else {
+      return CustomerManager.getCustomers().slice(0, 10)
+    }
+  }, [debouncedQuery])
+
+  useEffect(() => {
+    setSearchResults(memoizedSearchResults)
+  }, [memoizedSearchResults])
+
+  const resetForm = useCallback(() => {
     setFormData({
       name: "",
       email: "",
@@ -56,9 +68,9 @@ export function CustomerSelector({
       address: "",
       password: "",
     })
-  }
+  }, [])
 
-  const handleAddCustomer = () => {
+  const handleAddCustomer = useCallback(() => {
     try {
       if (
         !formData.name.trim() ||
@@ -89,17 +101,20 @@ export function CustomerSelector({
         description: error instanceof Error ? error.message : "Error desconocido",
       })
     }
-  }
+  }, [formData, onCustomerSelect, resetForm])
 
-  const handleSelectCustomer = (customer: Customer) => {
-    onCustomerSelect(customer)
-    setIsSearchOpen(false)
-    setSearchQuery("")
-  }
+  const handleSelectCustomer = useCallback(
+    (customer: Customer) => {
+      onCustomerSelect(customer)
+      setIsSearchOpen(false)
+      setSearchQuery("")
+    },
+    [onCustomerSelect],
+  )
 
-  const handleClearCustomer = () => {
+  const handleClearCustomer = useCallback(() => {
     onCustomerSelect(null)
-  }
+  }, [onCustomerSelect])
 
   return (
     <div className="space-y-2">
