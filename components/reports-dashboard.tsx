@@ -352,19 +352,20 @@ export default function ReportsDashboard() {
       `Ventas con Tarjeta,${SalesManager.formatCurrency(dailySales.cardSales)}`,
       "",
       "Detalle de Ventas",
-      "ID,Hora,Total,Método de Pago,Cajero",
+      "ID,Fecha,Hora,Total,Método de Pago,Cajero",
       ...dailySales.sales.map((sale) =>
         [
-          sale.id,
-          SalesManager.formatTime(sale.timestamp),
+          sale.id || "",
+          new Date(sale.timestamp).toLocaleDateString("es-DO"),
+          new Date(sale.timestamp).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
           SalesManager.formatCurrency(sale.total),
-          sale.paymentMethod === "cash" ? "Efectivo" : "Tarjeta",
-          sale.cashierName,
+          sale.paymentMethod === "cash" ? "Efectivo" : sale.paymentMethod === "card" ? "Tarjeta" : "Crédito",
+          sale.cashierName || "N/A",
         ].join(","),
       ),
     ].join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
@@ -375,56 +376,6 @@ export default function ReportsDashboard() {
     toast({
       title: "Reporte exportado",
       description: "El reporte diario se ha descargado correctamente",
-    })
-  }
-
-  const exportCustomerReport = () => {
-    if (customerConsumption.length === 0) return
-
-    const csvContent = [
-      `Reporte de Consumo por Cliente - ${startDate} a ${endDate}`,
-      "",
-      "Resumen por Cliente",
-      "Cliente,Email,Teléfono,Total Consumido,Deuda a Crédito,Ventas Totales,Ventas a Crédito",
-      ...customerConsumption.map((consumption) =>
-        [
-          consumption.customer.name,
-          consumption.customer.email,
-          consumption.customer.phone,
-          SalesManager.formatCurrency(consumption.totalAmount).replace(",", ""),
-          SalesManager.formatCurrency(consumption.creditAmount).replace(",", ""),
-          consumption.salesCount,
-          consumption.creditSalesCount,
-        ].join(","),
-      ),
-      "",
-      "Detalle de Ventas por Cliente",
-      "Cliente,ID Venta,Fecha,Hora,Total,Método de Pago",
-      ...customerConsumption.flatMap((consumption) =>
-        consumption.sales.map((sale) =>
-          [
-            consumption.customer.name,
-            sale.id,
-            SalesManager.formatDateTime(sale.timestamp).split(" ")[0],
-            SalesManager.formatTime(sale.timestamp),
-            SalesManager.formatCurrency(sale.total).replace(",", ""),
-            getPaymentMethodName(sale.paymentMethod),
-          ].join(","),
-        ),
-      ),
-    ].join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `reporte-clientes-${startDate}-${endDate}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-
-    toast({
-      title: "Reporte de clientes exportado",
-      description: "El reporte de consumo por cliente se ha descargado correctamente",
     })
   }
 
@@ -479,9 +430,9 @@ export default function ReportsDashboard() {
       "ID Venta,Fecha,Hora,Total,Método de Pago,Cliente",
       ...(weeklySales?.sales || []).map((sale) =>
         [
-          sale.id,
-          SalesManager.formatDateTime(sale.timestamp).split(" ")[0],
-          SalesManager.formatTime(sale.timestamp),
+          sale.id || "",
+          new Date(sale.timestamp).toLocaleDateString("es-DO"),
+          new Date(sale.timestamp).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
           SalesManager.formatCurrency(sale.total).replace(",", ""),
           getPaymentMethodName(sale.paymentMethod),
           sale.customerInfo?.name || "Sin cliente",
@@ -518,9 +469,9 @@ export default function ReportsDashboard() {
       "ID Venta,Fecha,Hora,Total,Método de Pago,Cliente",
       ...monthlySales.map((sale) =>
         [
-          sale.id,
-          SalesManager.formatDateTime(sale.timestamp).split(" ")[0],
-          SalesManager.formatTime(sale.timestamp),
+          sale.id || "",
+          new Date(sale.timestamp).toLocaleDateString("es-DO"),
+          new Date(sale.timestamp).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
           SalesManager.formatCurrency(sale.total).replace(",", ""),
           getPaymentMethodName(sale.paymentMethod),
           sale.customerInfo?.name || "Sin cliente",
@@ -539,6 +490,56 @@ export default function ReportsDashboard() {
     toast({
       title: "Reporte mensual exportado",
       description: "El reporte mensual se ha descargado correctamente",
+    })
+  }
+
+  const exportCustomerReportForPeriod = () => {
+    if (customerConsumption.length === 0) return
+
+    const csvContent = [
+      `Reporte de Consumo por Cliente - ${startDate} a ${endDate}`,
+      "",
+      "Resumen por Cliente",
+      "Cliente,Email,Teléfono,Total Consumido,Deuda a Crédito,Ventas Totales,Ventas a Crédito",
+      ...customerConsumption.map((consumption) =>
+        [
+          consumption.customer.name || "",
+          consumption.customer.email || "",
+          consumption.customer.phone || "",
+          SalesManager.formatCurrency(consumption.totalAmount).replace(",", ""),
+          SalesManager.formatCurrency(consumption.creditAmount).replace(",", ""),
+          consumption.salesCount,
+          consumption.creditSalesCount,
+        ].join(","),
+      ),
+      "",
+      "Detalle de Ventas por Cliente",
+      "Cliente,ID Venta,Fecha,Hora,Total,Método de Pago",
+      ...customerConsumption.flatMap((consumption) =>
+        consumption.sales.map((sale) =>
+          [
+            consumption.customer.name || "",
+            sale.id || "",
+            new Date(sale.timestamp).toLocaleDateString("es-DO"),
+            new Date(sale.timestamp).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
+            SalesManager.formatCurrency(sale.total).replace(",", ""),
+            getPaymentMethodName(sale.paymentMethod),
+          ].join(","),
+        ),
+      ),
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `reporte-clientes-${startDate}-${endDate}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+
+    toast({
+      title: "Reporte de clientes exportado",
+      description: "El reporte de consumo por cliente se ha descargado correctamente",
     })
   }
 
@@ -960,7 +961,7 @@ export default function ReportsDashboard() {
                       </div>
                       <div className="text-right">
                         <div className="font-bold">{SalesManager.formatCurrency(stat.total)}</div>
-                        <div className="text-xs text-muted-foreground">{stat.count} ventas</div>
+                        <div className="text-sm text-muted-foreground">{stat.count} ventas</div>
                       </div>
                     </div>
                   ))}
@@ -992,7 +993,11 @@ export default function ReportsDashboard() {
                 className="w-40"
               />
             </div>
-            <Button onClick={exportCustomerReport} disabled={customerConsumption.length === 0} className="mt-6">
+            <Button
+              onClick={exportCustomerReportForPeriod}
+              disabled={customerConsumption.length === 0}
+              className="mt-6"
+            >
               <Download className="w-4 h-4 mr-2" />
               Exportar CSV
             </Button>

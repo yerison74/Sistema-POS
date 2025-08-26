@@ -52,8 +52,6 @@ export function SettingsPanel() {
     templateId: "",
     publicKey: "",
     fromName: "",
-    fromEmail: "",
-    web3formsKey: "",
   })
   const [users, setUsers] = useState<User[]>([])
   const [isSaving, setIsSaving] = useState(false)
@@ -386,10 +384,10 @@ export function SettingsPanel() {
   }
 
   const handleTestEmail = async () => {
-    if (!emailConfig.fromEmail || !emailConfig.web3formsKey) {
+    if (!emailConfig.serviceId || !emailConfig.templateId || !emailConfig.publicKey) {
       toast({
         title: "Error",
-        description: "Complete la configuración de email antes de probar",
+        description: "Complete todos los campos de EmailJS antes de probar",
       })
       return
     }
@@ -647,41 +645,50 @@ export function SettingsPanel() {
               <Alert>
                 <Mail className="h-4 w-4" />
                 <AlertDescription>
-                  Configure su servicio de email para enviar facturas automáticamente a clientes con ventas a crédito.
-                  Usando Web3Forms - más simple y confiable que EmailJS.
+                  Configure EmailJS para enviar facturas automáticamente a clientes. EmailJS permite enviar emails
+                  directamente desde el navegador sin servidor backend.
                 </AlertDescription>
               </Alert>
 
               <div>
-                <Label htmlFor="web3formsKey">Clave de Acceso Web3Forms</Label>
+                <Label htmlFor="serviceId">Service ID</Label>
                 <Input
-                  id="web3formsKey"
-                  value={emailConfig.web3formsKey || ""}
-                  onChange={(e) => setEmailConfig({ ...emailConfig, web3formsKey: e.target.value })}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  id="serviceId"
+                  value={emailConfig.serviceId || ""}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, serviceId: e.target.value })}
+                  placeholder="service_xxxxxxx"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="fromName">Nombre del Remitente</Label>
-                  <Input
-                    id="fromName"
-                    value={emailConfig.fromName}
-                    onChange={(e) => setEmailConfig({ ...emailConfig, fromName: e.target.value })}
-                    placeholder="Mi Negocio POS"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="fromEmail">Email del Remitente</Label>
-                  <Input
-                    id="fromEmail"
-                    type="email"
-                    value={emailConfig.fromEmail}
-                    onChange={(e) => setEmailConfig({ ...emailConfig, fromEmail: e.target.value })}
-                    placeholder="mi-negocio@gmail.com"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="templateId">Template ID</Label>
+                <Input
+                  id="templateId"
+                  value={emailConfig.templateId || ""}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, templateId: e.target.value })}
+                  placeholder="template_xxxxxxx"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="publicKey">Public Key</Label>
+                <Input
+                  id="publicKey"
+                  type="password"
+                  value={emailConfig.publicKey || ""}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, publicKey: e.target.value })}
+                  placeholder="xxxxxxxxxxxxxxxx"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="fromName">Nombre del Negocio</Label>
+                <Input
+                  id="fromName"
+                  value={emailConfig.fromName}
+                  onChange={(e) => setEmailConfig({ ...emailConfig, fromName: e.target.value })}
+                  placeholder="Cafeteria Javier"
+                />
               </div>
 
               <div className="space-y-2">
@@ -690,19 +697,20 @@ export function SettingsPanel() {
                   <li>
                     Ve a{" "}
                     <a
-                      href="https://web3forms.com"
+                      href="https://emailjs.com"
                       target="_blank"
-                      rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"
+                      rel="noreferrer"
                     >
-                      web3forms.com
-                    </a>
+                      emailjs.com
+                    </a>{" "}
+                    y crea una cuenta
                   </li>
-                  <li>Crea una cuenta gratuita</li>
-                  <li>Obtén tu clave de acceso (Access Key)</li>
-                  <li>Pega la clave en el campo "Clave de Acceso Web3Forms"</li>
-                  <li>Completa tu nombre y email de remitente</li>
-                  <li>¡Listo! Mucho más simple que EmailJS</li>
+                  <li>Crea un nuevo servicio de email (Gmail, Outlook, etc.)</li>
+                  <li>Crea un template de email con las variables necesarias</li>
+                  <li>Copia el Service ID, Template ID y Public Key</li>
+                  <li>Pega los valores en los campos correspondientes</li>
+                  <li>¡Listo! Ahora puedes enviar emails a cualquier cliente</li>
                 </ul>
               </div>
 
@@ -713,7 +721,7 @@ export function SettingsPanel() {
                 </Button>
                 <Button
                   onClick={handleTestEmail}
-                  disabled={isSaving || !emailConfig.fromEmail || !emailConfig.web3formsKey}
+                  disabled={isSaving || !emailConfig.serviceId || !emailConfig.templateId || !emailConfig.publicKey}
                   variant="outline"
                 >
                   <Send className="w-4 h-4 mr-2" />
